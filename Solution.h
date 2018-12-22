@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <utility>
 #include <fstream>
+#include <cmath>
 
 #define MAX 0xFFFFFFFF
 using namespace std;
@@ -35,6 +36,15 @@ struct Solve
     {
         fitness = true;
     }
+    Solve(const Solve& other)
+    {
+        openList = other.openList;
+        assignmentList = other.assignmentList;
+        restCapacity = other.restCapacity;
+        useCapacity = other.useCapacity;
+    }
+
+
 
     //如果工厂j的容量在操作后小于0，返回false，不然返回true
     bool factoryUseCapacity(int j,int value)
@@ -104,7 +114,7 @@ bool cmp2(const pair<int,int>& a,const pair<int,int>& b)
 }
 class Solution
 {
-private:
+public:
     int clientNum,factoryNum;
     vector<int> facCapacity;
     vector<int> facOpenCost;
@@ -153,7 +163,7 @@ private:
     }
 
     //局部搜索估值函数
-    double judgeValue(const Solve& s)
+    double judgeValue(const Solve& s,bool switcher = true)
     {
         double totalCost = 0;
         for(int i = 0;i<factoryNum;i++)
@@ -165,7 +175,10 @@ private:
 
             if(s.restCapacity[i]<0)
             {
-                totalCost += (double)abs(s.restCapacity[i])/facCapacity[i]*facOpenCost[i];
+                if(switcher)
+                    totalCost += (double)abs(s.restCapacity[i])/facCapacity[i]*facOpenCost[i];
+                else
+                    totalCost += MAX;
             }
         }
 
@@ -187,13 +200,10 @@ private:
     */
     Solve generateNeighbourRandom(const Solve& origin)
     {
-        cout<<"In neighbour Generator"<<endl;
         Solve s = origin;
-        s.print();
         int j1,j2;
         if(s.fitness)
         {
-            cout<<"\t neighbour fit"<<endl;
             j1 = rand()%factoryNum,j2 = rand()%factoryNum;
             while(j1==j2 || !s.openList[j1] || !s.openList[j2])
             {
@@ -203,33 +213,27 @@ private:
         }
         else
         {
-            cout<<"\t neighbour unfit"<<endl;
             int totalRest = 0;
             int totalOut = 0;
             vector<pair<int,int>> restFactory;
             vector<pair<int,int>> outFactory;
-            cout<<"\t\t"<<"unfit debug. Question2: why always have the same ans."<<endl;
             for(int i = 0;i<factoryNum;i++)
             {
                 if(s.restCapacity[i]>0 && s.openList[i])
                 {
                     totalRest += s.restCapacity[i];
-                    cout<<"\t\t"<<"number:"<<i<<" totalRest:"<<totalRest<<endl;
                     restFactory.push_back(make_pair(i,totalRest));
                 }
                 else if(s.restCapacity[i]<0 && s.openList[i])
                 {
                     totalOut += abs(s.restCapacity[i]);
-                    cout<<"\t\t"<<"number:"<<i<<" totalOut:"<<totalOut<<endl;
                     outFactory.push_back(make_pair(i,totalOut));
                 }
             }
 
             //
             int index1 = rand()%totalOut;
-            cout<<"\t\t"<<"index1:"<<index1<<endl;
             int index2 = rand()%totalRest;
-            cout<<"\t\t"<<"index1:"<<index2<<endl;
             j1 = outFactory[outFactory.size()-1].first;
             j2 = restFactory[restFactory.size()-1].first;
             int j1Judge = totalOut,j2Judge = totalRest;
@@ -241,8 +245,6 @@ private:
                     j1 = outFactory[i].first;
                 }
             }
-            cout<<"\t\t"<<"Last j1:"<<j1<<endl;
-            cout<<"\t\t"<<"Last j1:"<<j2<<endl;
             for(int i = 0;i<restFactory.size();i++)
             {
                 if(restFactory[i].second>index2 && restFactory[i].second<j2Judge)
@@ -275,8 +277,6 @@ private:
         int i1 = clientI[index1];
         if(cliDemand[i1] < s.restCapacity[j2])
         {
-            cout<<"\tsituation 1"<<endl;
-            cout<<"\tclient "<<i1<<" from "<<j1<<" to "<<j2<<endl;
             s.factoryFreeCapacity(j1,cliDemand[i1]);
             s.factoryUseCapacity(j2,cliDemand[i1]);
             s.assignmentList[i1] = j2;
@@ -285,8 +285,6 @@ private:
         {
             int index2 = rand()%clientJ.size();
             int i2 = clientJ[index2];
-            cout<<"\tsituation 2"<<endl;
-            cout<<"\tinterchange"<<i1<<" and "<<i2<<" from "<<j1<<" and "<<j2<<endl;
             s.factoryFreeCapacity(j1,cliDemand[i1]);
             s.factoryUseCapacity(j2,cliDemand[i1]);
             s.factoryFreeCapacity(j2,cliDemand[i2]);
@@ -334,6 +332,7 @@ public:
             }
             assignmentCost.push_back(cost);
         }
+        fin.close();
     }
 
     //使用贪婪随机自适应算法产生初始解并返回
@@ -451,7 +450,6 @@ public:
             sort(restClient.begin(),restClient.end(),cmp1);
             sort(restFactory.begin(),restFactory.end(),cmp1);
         }
-        s.value = judgeValue(s);
         return s;
     }
 
@@ -467,9 +465,9 @@ public:
             double temperature = 400;
             double endTemperature = 1;
             double ratio = 0.97;
+            int endCounting = 0;
             while(temperature>endTemperature)
             {
-                cout<<"\n\ntempearture\t"<<temperature<<endl;
                 //随机产生邻域
                 //如果是好解，则无条件接纳
                     //保存全局最优解
@@ -479,22 +477,26 @@ public:
                 if(ss.value<s.value)
                 {
                     s = ss;
-                    if(s.value<bestAns && s.fitness)
+                    if(s.value<bestAns)
                     {
                         bestAns = s.value;
                         best = s;
                     }
-                    cout<<"good solve"<<endl;
+                    endCounting = 0;
                 }
                 else
                 {
+                    endCounting++;
                     double p = exp((s.value-ss.value)/temperature);
                     double pointer = (double)1.0*rand()/RAND_MAX;
                     if(p>pointer)
                     {
                         s = ss;
-                        cout<<"bad solve,but ac"<<endl;
                     }
+                }
+                if(endCounting > 100)
+                {
+                    break;
                 }
 
                 temperature *= ratio;
@@ -503,8 +505,100 @@ public:
         return best;
     }
 
+    void repair(Solve& ss)
+    {
+        //假设有一个工厂因为某些原因引入了一个客户导致出现负数的情况
+        int factory = 0;
+        for(int i = 0;i<ss.restCapacity.size();i++)
+        {
+            if(ss.restCapacity[i]<0)
+            {
+                factory = ss.restCapacity[i];
+            }
+        }
+        vector<int> customers;
+        for(int i = 0;i<ss.assignmentList.size();i++)
+        {
+            if(ss.assignmentList[i]==factory)
+            {
+                customers.push_back(i);
+            }
+        }
+        //对于每一个用户，检查移走它们的费用与可能性
+        for(int i = 0;i<customers.size();i++)
+        {
+            int c = customers[i];
+            int minCost = MAX;
+            int orderFactory = -1;
+            for(int j = 0;j<ss.openList.size();j++)
+            {
+                if(ss.openList[j])//如果开放，能放得下，还够小
+                {
+                    if(ss.restCapacity[j]>=cliDemand[c] && assignmentCost[j][c]<minCost)
+                    {
+                        minCost = assignmentCost[j][c];
+                        orderFactory = j;
+                    }
+                }
+            }
+
+            if(orderFactory != -1)
+            {
+                ss.assignmentList[c] = orderFactory;
+                ss.factoryFreeCapacity(factory,cliDemand[c]);
+                ss.factoryUseCapacity(orderFactory,cliDemand[c]);
+                ss.fitness = true;
+                for(int j = 0 ;j < ss.restCapacity.size();j++)
+                {
+                    if(ss.restCapacity[j]<0)
+                    {
+                        ss.fitness = false;
+                        break;
+                    }
+                }
+                if(ss.fitness)
+                    break;
+            }
+
+        }
+    }
+
+    int getFactorySize()
+    {
+        return factoryNum;
+    }
+    void outputTofile(string filename,Solve s)
+    {
+        string newFilename = "ans_"+filename+".txt";
+        ofstream fout(newFilename);
+        fout<<s.value<<endl;
+        for(int i = 0;i<s.openList.size();i++)
+        {
+            fout<<s.openList[i]<<" ";
+        }
+        fout<<endl;
+        for(int i = 0;i<s.assignmentList.size();i++)
+        {
+            fout<<s.assignmentList[i]<<" ";
+        }
+        fout<<endl;
+        fout.close();
+    }
+
+    void clear()
+    {
+        facCapacity.clear();
+        facOpenCost.clear();
+        cliDemand.clear();
+        assignmentCost.clear();
+    }
 
     //根据产生的初始解进行禁忌搜索并返回
+    Solve TuboSearch(vector<Solve> initSet)
+    {
+
+    }
+
 };
 
 #endif // SOLUTION_H
