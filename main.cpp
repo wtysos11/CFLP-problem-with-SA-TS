@@ -4,6 +4,8 @@
 #include <string>
 using namespace std;
 
+#define OUTPUT 1 //output to file?
+//#define DEBUG
 double solveUsingSA(string filename)
 {
     Solution s(filename);
@@ -18,28 +20,36 @@ double solveUsingSA(string filename)
     }
 
     Solve ss = s.SA(initSet);
+#ifdef DEBUG
+    cout<<"best solution"<<endl;
+    ss.print();
+#endif
     if(!ss.fitness)//如果解不合法，则尝试修复
+    {
         s.repair(ss);
+#ifdef DEBUG
+        cout<<"after repair"<<endl;
+        ss.print();
+#endif
+    }
+
     while(!ss.fitness)//如果仍然不符合限制，则继续修复
     {
+#ifdef DEBUG
         cout<<"not fit"<<endl;
+#endif
         //如果不符合限制，则尝试打开工厂
-        bool first = false;
+        //对于每个给定的初始解，随机打开一个关闭的工厂
         for(int i = 0;i<times;i++)
         {
             Solve& solve = initSet[i];
             vector<int> factory;
-            for(int j = 0;j<solve.openList.size();j++)
+            for(int j = 0;j<solve.openList.size();j++)//因为如果有多于一次开放工厂的可能，所以这部分要放在循环内
             {
                 if(!solve.openList[j])
                 {
                     factory.push_back(j);
                 }
-            }
-            if(!first)
-            {
-                cout<<"factory rest size:"<<factory.size()<<endl;
-                first = true;
             }
 
             int index = rand()%factory.size();
@@ -48,18 +58,16 @@ double solveUsingSA(string filename)
             solve.restCapacity[index] = s.facCapacity[index];
         }
         ss = s.SA(initSet);
-        ss.fitness = true;
-        for(int i = 0;i<ss.restCapacity.size();i++)
-        {
-            if(ss.restCapacity[i]<0)
-            {
-                ss.fitness = false;
-                break;
-            }
-        }
+#ifdef DEBUG
+        cout<<"\n\n"<<endl;
+        ss.print();
+        cout<<"\n\n"<<endl;
+#endif
     }
     ss.value = s.judgeValue(ss);//因为可能修改，所以进行更新
+#ifdef OUTPUT
     s.outputTofile("sa_"+filename,ss);
+#endif
     return ss.value;
 }
 
@@ -79,7 +87,9 @@ void outputSASolve()
         begining = time(NULL);
         double ans = solveUsingSA(filenameSet[i]);
         ending = time(NULL);
+#ifdef OUTPUT
         fout<<filenameSet[i]<<"\t"<<ans<<"\t"<<difftime(ending,begining)<<endl;
+#endif
         cout<<filenameSet[i]<<"\t"<<ans<<"\t"<<difftime(ending,begining)<<endl;
 
     }
@@ -96,14 +106,21 @@ void outputTSSolve()
         initSet.push_back(s.initializeSolution());
     }
     Solve ss = s.TabuSearch(initSet);
+    if(!ss.fitness)
+    {
+        cout<<"repair"<<endl;
+        s.repair(ss);
+    }
+    ss.value = s.TabuSearchJudge(ss);
     cout<<ss.value<<endl;
-    cout<<s.TabuSearchJudge(ss,true)<<endl;
     ss.print();
 }
 
 int main(void)
 {
-    outputSASolve();
+   // outputSASolve();
+    outputTSSolve();
+
 
     return 0;
 }

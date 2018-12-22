@@ -21,6 +21,14 @@ struct Oper
     int j1,j2;
     int i1,i2;
     int weight;
+    Oper(int j1,int j2,int i1,int i2,int w)
+    {
+        this->j1 = j1;
+        this->j2 = j2;
+        this->i1 = i1;
+        this->i2 = i2;
+        weight = w;
+    }
 };
 
 #define MAX 0xFFFFFFFF
@@ -80,7 +88,7 @@ struct Solve
         bool change = false;
         if(restCapacity[j]<0 && restCapacity[j] + value>=0)
             change = true;
-        
+
         restCapacity[j] += value;
         useCapacity[j] -= value;
 
@@ -727,7 +735,8 @@ public:
 
                             if(s.restCapacity[j2]>cliDemand[i1])
                             {
-                                oper.push_back(Oper{j1,j2,i1,-1,assignmentCost[j1][i1] - assignmentCost[j2][i1]});
+                                int weight = assignmentCost[j1][i1] - assignmentCost[j2][i1];
+                                oper.push_back(Oper(j1,j2,i1,-1,weight));
                             }
                             else if(j1<j2)
                             {
@@ -739,7 +748,8 @@ public:
 
                                     if(s.restCapacity[j2] - cliDemand[i1] + cliDemand[i2]>0 && s.restCapacity[j1] - cliDemand[i2] + cliDemand[i1]>0)
                                     {
-                                        oper.push_back(Oper{j1,j2,i1,-1,assignmentCost[j1][i1] + assignmentCost[j2][i2] - assignmentCost[j2][i1] - assignmentCost[j1][i2]});
+                                        int weight = assignmentCost[j1][i1] + assignmentCost[j2][i2] - assignmentCost[j2][i1] - assignmentCost[j1][i2];
+                                        oper.push_back(Oper(j1,j2,i1,-1,weight));
                                     }
                                 }
                             }
