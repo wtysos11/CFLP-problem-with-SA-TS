@@ -18,11 +18,12 @@ double solveUsingSA(string filename)
     }
 
     Solve ss = s.SA(initSet);
-    s.repair(ss);
-
-    while(!ss.fitness)
+    if(!ss.fitness)//如果解不合法，则尝试修复
+        s.repair(ss);
+    while(!ss.fitness)//如果仍然不符合限制，则继续修复
     {
-        //�����һ������
+        cout<<"not fit"<<endl;
+        //如果不符合限制，则尝试打开工厂
         bool first = false;
         for(int i = 0;i<times;i++)
         {
@@ -57,13 +58,14 @@ double solveUsingSA(string filename)
             }
         }
     }
+    ss.value = s.judgeValue(ss);//因为可能修改，所以进行更新
     s.outputTofile("sa_"+filename,ss);
     return ss.value;
 }
 
 void outputSASolve()
 {
-    ofstream fout("ans_sa_total.txt");
+    ofstream fout("ans_sa_total.txt",ios::app);
     vector<string> filenameSet;
 
     for(int i = 1;i<=71;i++)
@@ -84,8 +86,24 @@ void outputSASolve()
     fout.close();
 }
 
+void outputTSSolve()
+{
+    string s1 = "p1";
+    Solution s(s1);
+    vector<Solve> initSet;
+    for(int i = 0;i<100;i++)
+    {
+        initSet.push_back(s.initializeSolution());
+    }
+    Solve ss = s.TabuSearch(initSet);
+    cout<<ss.value<<endl;
+    cout<<s.TabuSearchJudge(ss,true)<<endl;
+    ss.print();
+}
+
 int main(void)
 {
     outputSASolve();
+
     return 0;
 }
