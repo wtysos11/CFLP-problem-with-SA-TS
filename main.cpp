@@ -4,7 +4,7 @@
 #include <string>
 using namespace std;
 
-#define OUTPUT 1 //output to file?
+//#define OUTPUT 1 //output to file?
 //#define DEBUG
 double solveUsingSA(string filename)
 {
@@ -96,10 +96,9 @@ void outputSASolve()
     fout.close();
 }
 
-void outputTSSolve()
+double solveUsingTS(string filename)
 {
-    string s1 = "p1";
-    Solution s(s1);
+    Solution s(filename);
     vector<Solve> initSet;
     for(int i = 0;i<100;i++)
     {
@@ -108,12 +107,43 @@ void outputTSSolve()
     Solve ss = s.TabuSearch(initSet);
     if(!ss.fitness)
     {
-        cout<<"repair"<<endl;
         s.repair(ss);
     }
     ss.value = s.TabuSearchJudge(ss);
+#ifdef DEBUG
     cout<<ss.value<<endl;
     ss.print();
+#endif
+#ifdef OUTPUT
+    s.outputTofile("ts_"+filename,ss);
+#endif
+    return ss.value;
+}
+
+void outputTSSolve()
+{
+    ofstream fout("ans_ts_total.txt",ios::app);
+    vector<string> filenameSet;
+
+    for(int i = 1;i<=71;i++)
+    {
+        filenameSet.push_back("p"+to_string(i));
+    }
+
+    for(int i = 0;i<filenameSet.size();i++)
+    {
+        time_t begining,ending;
+        begining = time(NULL);
+        double ans = solveUsingTS(filenameSet[i]);
+        ending = time(NULL);
+#ifdef OUTPUT
+        fout<<filenameSet[i]<<"\t"<<ans<<"\t"<<difftime(ending,begining)<<endl;
+#endif
+        cout<<filenameSet[i]<<"\t"<<ans<<"\t"<<difftime(ending,begining)<<endl;
+
+    }
+    fout.close();
+
 }
 
 int main(void)

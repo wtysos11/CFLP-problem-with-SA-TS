@@ -338,6 +338,142 @@ public:
 
         return s;
     }
+    //产生操作，用于禁忌搜索
+    Oper generateNeighbourOper(const Solve& origin)
+    {
+        Solve s = origin;
+        int j1,j2;
+        if(s.fitness)//如果该解是合法解，则用容量加权随机求j2（因为j2是接受者，显然，一个容量更大的接收者会更好）
+        {
+            //求加权平均值
+            int capaSum = 0;
+            int pointer = 0;
+            vector<pair<int,int>> capacity;
+            for(int i = 0;i<s.openList.size();i++)
+            {
+                if(!s.openList[i])
+                    continue;
+
+                capaSum += s.restCapacity[i];
+                capacity.push_back(make_pair(i,capaSum));
+            }
+
+            pointer = rand()%capaSum;
+            j2 = capacity[capacity.size()-1].first;
+            int j2Judge = capaSum;
+            for(int i = 0;i<capacity.size();i++)
+            {
+                if(capacity[i].second>pointer && capacity[i].second<j2Judge)
+                {
+                    j2Judge = capacity[i].second;
+                    j2 = capacity[i].first;
+                }
+            }
+
+            j1 = rand()%factoryNum;
+            while(!s.openList[j1] || j1==j2)
+            {
+                j1 = rand()%factoryNum;
+            }
+        }
+        else
+        {
+            //如果存在不合法解，则将不合法的工厂的超出流量进行加权后随机选择，合法工厂的剩余流量加权后随机选择，这样子可以更可能选出尽量剩余多的工厂来接受流量。
+            int totalRest = 0;
+            int totalOut = 0;
+            vector<pair<int,int>> restFactory;
+            vector<pair<int,int>> outFactory;
+            for(int i = 0;i<factoryNum;i++)
+            {
+                if(s.restCapacity[i]>0 && s.openList[i])
+                {
+                    totalRest += s.restCapacity[i];
+                    restFactory.push_back(make_pair(i,totalRest));
+                }
+                else if(s.restCapacity[i]<0 && s.openList[i])
+                {
+                    totalOut += abs(s.restCapacity[i]);
+                    outFactory.push_back(make_pair(i,totalOut));
+                }
+            }
+
+            if(totalOut == 0)//可能出现错漏
+            {
+                s.fitness = true;
+                return generateNeighbourOper(s);
+            }
+            //找到大于指针的最小值
+            int index1 = rand()%totalOut;
+            int index2 = rand()%totalRest;
+            j1 = outFactory[outFactory.size()-1].first;
+            j2 = restFactory[restFactory.size()-1].first;
+            int j1Judge = totalOut,j2Judge = totalRest;
+            for(int i = 0;i<outFactory.size();i++)
+            {
+                if(outFactory[i].second>index1 && outFactory[i].second<j1Judge)
+                {
+                    j1Judge = outFactory[i].second;
+                    j1 = outFactory[i].first;
+                }
+            }
+            for(int i = 0;i<restFactory.size();i++)
+            {
+                if(restFactory[i].second>index2 && restFactory[i].second<j2Judge)
+                {
+                    j2Judge = restFactory[i].second;
+                    j2 = restFactory[i].first;
+                }
+            }
+        }
+        //寻找要交换的顾客
+        vector<int> clientI,clientJ;
+        for(int i = 0 ;i<clientNum;i++)
+        {
+            if(s.assignmentList[i] == j1)
+            {
+                clientI.push_back(i);
+            }
+            else if(s.assignmentList[i] == j2)
+            {
+                clientJ.push_back(i);
+            }
+        }
+
+        if(clientI.size()==0)//有可能出现工厂没有分配人的情况，这时候随机开始下一次
+        {
+            return generateNeighbourOper(origin);
+        }
+        //预先遍历所有客户，找到最优解
+        int index1 = rand()%clientI.size();
+        int minW = MAX;
+        Oper opera(-1,-1,-1,-1,-1);
+        for(int i = 0;i<clientI.size();i++)
+        {
+            int i1 = clientI[i];
+            if(cliDemand[i1] < s.restCapacity[j2])
+            {
+                if(assignmentCost[j2][i1] - assignmentCost[j1][i1] < minW)
+                {
+                    minW = assignmentCost[j2][i1] - assignmentCost[j1][i1];
+                    opera = Oper(j1,j2,i1,-1,minW);
+                }
+            }
+            else
+            {
+                for(int j = 0;j<clientJ.size();j++)
+                {
+                    int i2 = clientJ[j];
+                    if(assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2] <minW)
+                    {
+                        minW = assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2];
+                        opera = Oper(j1,j2,i1,i2,minW);
+                    }
+                }
+            }
+        }
+
+        return opera;
+    }
 public:
     //使用文件内容初始化
     Solution(string filename)
@@ -681,7 +817,7 @@ public:
         上述两种情况，都应该优先从小的考虑。
     */
 
-    Solve TabuSearch(vector<Solve> initSet)
+    Solve TabuSearch(vector<Solve>& initSet)
     {
         Solve best;
         int bestValue = MAX;
@@ -689,6 +825,8 @@ public:
         vector<pair<int,int>> tabuList(clientNum/4,make_pair(-1,-1));//禁忌列表表示在这段范围内，客户i不入工厂j
         int tabuPoint = 0;
         int tabuEnd = 0;
+        //tabuList为循环队列，tabuPoint==tabuEnd时为空，其余情况下由tabuPoint -> tabuEnd，到达tabuEnd则停止。如果队列满，则有tabuPoint = tabuEnd + 1
+
         //initSet为外层构建好的初始解，大部分可行（不排除不可行的情况）
         /*
         当没有达到停止要求的时候
@@ -697,9 +835,9 @@ public:
         如果1000次搜索没有结果，会尝试扩大搜索范围
 
         */
+
         for(int i = 0 ;i<initSet.size();i++)
         {
-            cout<<i<<endl;
             Solve s = initSet[i];
             s.value = TabuSearchJudge(s);
             if(bestValue<s.value)
@@ -713,48 +851,13 @@ public:
 
             while(times<200)
             {
+                //暴力搜索
                 //500次，从开放列表中进行遍历
                 vector<Oper> oper;
-                for(int j1 = 0;j1<s.openList.size();j1++)
+                //通过多次随机操作产生大量可行解
+                for(int j = 0;j<50;j++)
                 {
-                    if(!s.openList[j1])
-                    {
-                        continue;
-                    }
-
-                    for(int j2 = 0;j2<s.openList.size();j2++)
-                    {
-                        if(!s.openList[j2] || j1==j2)
-                            continue;
-
-                        //尝试从j1到j2进行移动或者交换操作
-                        for(int i1 = 0;i1<s.assignmentList.size();i1++)
-                        {
-                            if(s.assignmentList[i1]!=j1)
-                                continue;
-
-                            if(s.restCapacity[j2]>cliDemand[i1])
-                            {
-                                int weight = assignmentCost[j1][i1] - assignmentCost[j2][i1];
-                                oper.push_back(Oper(j1,j2,i1,-1,weight));
-                            }
-                            else if(j1<j2)
-                            {
-                                //找寻一个可以交换的对象
-                                for(int i2 = 0;i2<s.assignmentList.size();i2++)
-                                {
-                                    if(s.assignmentList[i2]!=j2)
-                                        continue;
-
-                                    if(s.restCapacity[j2] - cliDemand[i1] + cliDemand[i2]>0 && s.restCapacity[j1] - cliDemand[i2] + cliDemand[i1]>0)
-                                    {
-                                        int weight = assignmentCost[j1][i1] + assignmentCost[j2][i2] - assignmentCost[j2][i1] - assignmentCost[j1][i2];
-                                        oper.push_back(Oper(j1,j2,i1,-1,weight));
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    oper.push_back(generateNeighbourOper(s));
                 }
                 sort(oper.begin(),oper.end(),[](const Oper &a, const Oper& b){
                     return a.weight<b.weight;
@@ -765,6 +868,10 @@ public:
                     int j1 = oper[i].j1,j2 = oper[i].j2;
                     int i1 = oper[i].i1,i2 = oper[i].i2;
                     bool pass = true;
+                    //说明没有进一步选项
+                    if(i1 == -1 && i2 == -1 && j1 == -1 && j2 == -1)
+                        break;
+                    //检查禁忌表，看是否存在项目
                     for(int j = tabuPoint;j<tabuEnd;j++)
                     {
                         if(j == tabuList.size())
@@ -789,7 +896,7 @@ public:
                             s.assignmentList[i1] = j2;
                             s.factoryFreeCapacity(j1,cliDemand[i1]);
                             s.factoryUseCapacity(j2,cliDemand[i1]);
-                            tabuList[tabuEnd] = make_pair(i1,j2);
+                            tabuList[tabuEnd] = make_pair(i1,j1);
                             tabuEnd++;
                             if(tabuEnd == tabuList.size())
                                 tabuEnd = 0;
@@ -809,7 +916,7 @@ public:
                             s.factoryFreeCapacity(j2,cliDemand[i2]);
                             s.factoryUseCapacity(j1,cliDemand[i2]);
 
-                            tabuList[tabuEnd] = make_pair(i1,j2);
+                            tabuList[tabuEnd] = make_pair(i1,j1);
                             tabuEnd++;
                             if(tabuEnd == tabuList.size())
                                 tabuEnd = 0;
@@ -820,7 +927,7 @@ public:
                                     tabuPoint = 0;
                             }
 
-                            tabuList[tabuEnd] = make_pair(i2,j1);
+                            tabuList[tabuEnd] = make_pair(i2,j2);
                             tabuEnd++;
                             if(tabuEnd == tabuList.size())
                                 tabuEnd = 0;
@@ -840,7 +947,7 @@ public:
                         }
                         break;
                     }
-                }
+                }//tabu search
                 times++;
             }
         }
