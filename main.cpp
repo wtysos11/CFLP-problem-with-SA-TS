@@ -4,7 +4,7 @@
 #include <string>
 using namespace std;
 
-//#define OUTPUT 1 //output to file?
+#define OUTPUT 1 //output to file?
 //#define DEBUG
 double solveUsingSA(string filename)
 {
@@ -66,7 +66,7 @@ double solveUsingSA(string filename)
     }
     ss.value = s.judgeValue(ss);//因为可能修改，所以进行更新
 #ifdef OUTPUT
-    s.outputTofile("sa_"+filename,ss);
+    s.outputTofile("sa",ss);
 #endif
     return ss.value;
 }
@@ -115,7 +115,7 @@ double solveUsingTS(string filename)
     ss.print();
 #endif
 #ifdef OUTPUT
-    s.outputTofile("ts_"+filename,ss);
+    s.outputTofile("ts"+filename,ss);
 #endif
     return ss.value;
 }
@@ -148,7 +148,7 @@ void outputTSSolve()
 
 int main(void)
 {
-   // outputSASolve();
+    outputSASolve();
     outputTSSolve();
 
 

@@ -339,7 +339,7 @@ public:
         return s;
     }
     //产生操作，用于禁忌搜索
-    Oper generateNeighbourOper(const Solve& origin)
+    Oper generateNeighbourOper(const Solve& origin,vector<pair<int,int>>& tabuList,int minNum)
     {
         Solve s = origin;
         int j1,j2;
@@ -400,7 +400,7 @@ public:
             if(totalOut == 0)//可能出现错漏
             {
                 s.fitness = true;
-                return generateNeighbourOper(s);
+                return generateNeighbourOper(s,tabuList,minNum);
             }
             //找到大于指针的最小值
             int index1 = rand()%totalOut;
@@ -441,9 +441,9 @@ public:
 
         if(clientI.size()==0)//有可能出现工厂没有分配人的情况，这时候随机开始下一次
         {
-            return generateNeighbourOper(origin);
+            return generateNeighbourOper(origin,tabuList,minNum);
         }
-        //预先遍历所有客户，找到最优解
+        //预先遍历所有客户，找到最优解。注：要考虑到禁忌列表的因素
         int index1 = rand()%clientI.size();
         int minW = MAX;
         Oper opera(-1,-1,-1,-1,-1);
@@ -452,7 +452,22 @@ public:
             int i1 = clientI[i];
             if(cliDemand[i1] < s.restCapacity[j2])
             {
-                if(assignmentCost[j2][i1] - assignmentCost[j1][i1] < minW)
+                //该操作需要i1 j2不在禁忌列表中
+                bool finding = false;
+                for(int i = 0;i<tabuList.size();i++)
+                {
+                    if(tabuList[i].first==i1&&tabuList[i].second==j2)
+                    {
+                        finding = true;
+                        break;
+                    }
+                }
+                if(assignmentCost[j2][i1] - assignmentCost[j1][i1] < minW && !finding)
+                {
+                    minW = assignmentCost[j2][i1] - assignmentCost[j1][i1];
+                    opera = Oper(j1,j2,i1,-1,minW);
+                }
+                else if(s.value + assignmentCost[j2][i1] - assignmentCost[j1][i1] < minNum && finding && assignmentCost[j2][i1] - assignmentCost[j1][i1] < minW)
                 {
                     minW = assignmentCost[j2][i1] - assignmentCost[j1][i1];
                     opera = Oper(j1,j2,i1,-1,minW);
@@ -463,7 +478,22 @@ public:
                 for(int j = 0;j<clientJ.size();j++)
                 {
                     int i2 = clientJ[j];
-                    if(assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2] <minW)
+
+                    bool finding = false;
+                    for(int i = 0;i<tabuList.size();i++)
+                    {
+                        if(tabuList[i].first==i1&&tabuList[i].second==j2 || tabuList[i].first==i2&&tabuList[i].second==j1)
+                        {
+                            finding = true;
+                            break;
+                        }
+                    }
+                    if(assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2] <minW && !finding)
+                    {
+                        minW = assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2];
+                        opera = Oper(j1,j2,i1,i2,minW);
+                    }
+                    else if(s.value + assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2] < minNum && finding && assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2] <minW)
                     {
                         minW = assignmentCost[j2][i1] + assignmentCost[j1][i2] - assignmentCost[j1][i1] - assignmentCost[j2][i2];
                         opera = Oper(j1,j2,i1,i2,minW);
@@ -751,7 +781,7 @@ public:
     void outputTofile(string filename,Solve s)
     {
         string newFilename = "ans_"+filename+".txt";
-        ofstream fout(newFilename);
+        ofstream fout(newFilename,ios::app);
         fout<<s.value<<endl;
         for(int i = 0;i<s.openList.size();i++)
         {
@@ -838,6 +868,7 @@ public:
 
         for(int i = 0 ;i<initSet.size();i++)
         {
+            cout<<i<<endl;
             Solve s = initSet[i];
             s.value = TabuSearchJudge(s);
             if(bestValue<s.value)
@@ -857,7 +888,7 @@ public:
                 //通过多次随机操作产生大量可行解
                 for(int j = 0;j<50;j++)
                 {
-                    oper.push_back(generateNeighbourOper(s));
+                    oper.push_back(generateNeighbourOper(s,tabuList,bestValue));
                 }
                 sort(oper.begin(),oper.end(),[](const Oper &a, const Oper& b){
                     return a.weight<b.weight;
